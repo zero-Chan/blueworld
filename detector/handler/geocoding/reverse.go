@@ -29,6 +29,25 @@ type ReverseResponse struct {
 	City string
 }
 
+type AmapReverseResponse struct {
+	Status    string                        `json:"status"`
+	Info      string                        `json:"info"`
+	InfoCode  string                        `json:"infocode"`
+	RegeoCode AmapReverseResponse_RegeoCode `json:"regeocode"`
+}
+
+type AmapReverseResponse_RegeoCode struct {
+	FormatedAddress  string                                         `json:"formatted_address"`
+	AddressComponent AmapReverseResponse_RegeoCode_AddressComponent `json:"addressComponent"`
+}
+
+type AmapReverseResponse_RegeoCode_AddressComponent struct {
+	Country  string `json:"country"`
+	City     string `json:"city"`
+	Province string `json:"province"`
+	District string `json:"district"`
+}
+
 type reverseCore struct {
 	base.BaseHttpCore
 
@@ -49,6 +68,8 @@ func NewReverseCore() *reverseCore {
 }
 
 func (this *reverseCore) ServeHTTP(httpRespw http.ResponseWriter, httpReq *http.Request) {
+	// curl -X POST -H "Content-Type:application/json" -d '{"Longitude": 113.27, "Latitude": 23.13}' -i 'http://127.0.0.1:8080/geocoding/reverse'
+
 	// read http body
 	bodyStream, err := ioutil.ReadAll(httpReq.Body)
 	if err != nil {
@@ -63,10 +84,21 @@ func (this *reverseCore) ServeHTTP(httpRespw http.ResponseWriter, httpReq *http.
 		return
 	}
 
-	err = this.CallAmap(&request)
+	resp, err := this.CallAmap(&request)
 	if err != nil {
-
+		log.Printf("CallAmap fail: %s", err)
+		return
 	}
+
+	respbody, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("json marshal resp body fail: %s", err)
+		return
+	}
+
+	httpRespw.Write(respbody)
+	httpRespw.WriteHeader(200)
+	return
 }
 
 func (this *reverseCore) NewRequest() interface{} {
@@ -83,6 +115,31 @@ func (this *reverseCore) CallAmap(req *ReverseRequest) (resp ReverseResponse, er
 	if err != nil {
 		return
 	}
+
+	if httpResp.StatusCode != 200 {
+		err = fmt.Errorf("http invalid status code: %d", httpResp.StatusCode)
+		return
+	}
+
+	bodybuf, err := ioutil.ReadAll(httpResp.Body)
+	if err != nil {
+		return
+	}
+
+	amapResp := AmapReverseResponse{}
+	err = json.Unmarshal(bodybuf, &amapResp)
+	if err != nil {
+		return
+	}
+
+	if amapResp.Status != "1" {
+		err = fmt.Errorf("invalid amapresp, info: %s", amapResp.Info)
+		return
+	}
+
+	resp.Country = amapResp.RegeoCode.AddressComponent.Country
+	resp.Province = amapResp.RegeoCode.AddressComponent.Province
+	resp.City = amapResp.RegeoCode.AddressComponent.City
 
 	return
 }
