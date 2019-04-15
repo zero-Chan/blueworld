@@ -1,4 +1,5 @@
 pipeline:
   test:
+    image: centos
     commands:
       echo 'hello'
