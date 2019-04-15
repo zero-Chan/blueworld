@@ -1,0 +1,4 @@
+pipeline:
+  test:
+    commands:
+      echo 'hello'
